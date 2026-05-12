@@ -321,17 +321,18 @@ def _setup_youtube():
             return False
 
     print("  Autenticando con YouTube...")
-    print("  Se abrira una ventana del navegador para autorizar acceso.")
+    print("  Te dara un enlace para copiar en tu navegador.")
+    print("  Despues pegas el codigo de autorizacion aqui.")
     print()
 
     try:
         from modules.youtube_uploader import get_youtube_client
         client = get_youtube_client()
-        print("  [OK] YouTube autenticado correctamente.")
+        print("\n  [OK] YouTube autenticado correctamente.")
         return True
     except Exception as e:
         print(f"  [ERROR] {e}")
-        print("  Puedes intentar de nuevo mas tarde con: python cli.py --setup")
+        print("  Puedes intentar de nuevo mas tarde con: python cli.py --wizard")
         return False
 
 
@@ -366,6 +367,12 @@ def run_wizard():
     info = _scan_system()
 
     info = _run_benchmarks(info)
+
+    # Swap automatico en VPS con poca RAM
+    from modules.resource_manager import setup_swap_interactive, adjust_swappiness
+    swap_ok = setup_swap_interactive()
+    if swap_ok and info["os"] == "Linux":
+        adjust_swappiness(60)
 
     auto_cfg = _determine_config(info)
 

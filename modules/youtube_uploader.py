@@ -1,6 +1,6 @@
 """
 modules/youtube_uploader.py - Subida a YouTube con OAuth2 (multiplataforma).
-Usa el mismo client_secrets.json.
+Soporta Linux headless: muestra URL para copiar al navegador.
 """
 
 import os
@@ -17,6 +17,15 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube",
 ]
+
+
+def _is_headless() -> bool:
+    import platform
+    if platform.system() != "Linux":
+        return False
+    display = os.environ.get("DISPLAY", "")
+    wayland = os.environ.get("WAYLAND_DISPLAY", "")
+    return not display and not wayland
 
 
 def get_youtube_client():
@@ -42,9 +51,30 @@ def get_youtube_client():
                     f"No se encontro client_secrets.json en:\n{CLIENT_SECRETS}\n"
                     "Descargalo desde Google Cloud Console > Credentials."
                 )
-            log.info("Abriendo navegador para autenticar YouTube...")
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS, SCOPES)
-            creds = flow.run_local_server(port=0)
+
+            flow = InstalledAppFlow.from_client_secrets_file(
+                CLIENT_SECRETS, SCOPES,
+            )
+
+            if _is_headless():
+                log.info("Modo headless: autenticacion por consola")
+                print()
+                print("=" * 55)
+                print("  AUTENTICACION DE YOUTUBE")
+                print("=" * 55)
+                print()
+                print("  Copia esta URL en tu navegador:")
+                print()
+
+                auth_url, _ = flow.authorization_url(prompt="consent")
+                print(f"  {auth_url}")
+                print()
+                code = input("  Pega aqui el codigo de autorizacion: ").strip()
+                flow.fetch_token(code=code)
+                creds = flow.credentials
+            else:
+                log.info("Abriendo navegador para autenticar YouTube...")
+                creds = flow.run_local_server(port=0)
 
         with open(TOKEN_FILE, "wb") as f:
             pickle.dump(creds, f)
@@ -93,7 +123,9 @@ def upload_video(youtube, file_path, title, description, tags,
     request = youtube.videos().insert(
         part=",".join(body.keys()),
         body=body,
-        media_body=MediaFileUpload(file_path, chunksize=chunk_size, resumable=True),
+        media_body=MediaFileUpload(
+            file_path, chunksize=chunk_size, resumable=True,
+        ),
     )
 
     response = None
@@ -116,9 +148,14 @@ def upload_video(youtube, file_path, title, description, tags,
                 err_str = str(e).lower()
                 if retry >= max_retries:
                     raise
-                if "timed out" in err_str or "timeout" in err_str or "broken pipe" in err_str:
+                if any(kw in err_str for kw in
+                       ("timed out", "timeout", "broken pipe",
+                        "connection reset", "connection aborted")):
                     wait = min(2 ** retry + random.random(), 60)
-                    log.warning(f"  Timeout en chunk, reintentando en {wait:.0f}s ({retry}/{max_retries})...")
+                    log.warning(
+                        f"  Error de red en chunk, reintentando en "
+                        f"{wait:.0f}s ({retry}/{max_retries})..."
+                    )
                     time.sleep(wait)
                 else:
                     raise
@@ -129,7 +166,8 @@ def upload_video(youtube, file_path, title, description, tags,
     return video_id
 
 
-def update_video_description(youtube, video_id: str, new_description: str) -> bool:
+def update_video_description(youtube, video_id: str,
+                             new_description: str) -> bool:
     log = get_logger()
     try:
         resp = youtube.videos().list(part="snippet", id=video_id).execute()

@@ -1,5 +1,6 @@
 """
 modules/bg_downloader.py - Descarga de videos de fondo con yt-dlp.
+Soporta cookies.txt para evitar bloqueo de YouTube en VPS.
 """
 
 import os
@@ -10,6 +11,7 @@ import subprocess
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LARGOS_DIR = os.path.join(_BASE, "videos", "largos")
 SHORTS_DIR = os.path.join(_BASE, "videos", "shorts")
+COOKIES_FILE = os.path.join(_BASE, "cookies.txt")
 
 
 def ensure_ytdlp() -> bool:
@@ -26,6 +28,39 @@ def ensure_ytdlp() -> bool:
         return True
 
 
+def _get_cookies_args() -> list:
+    if os.path.exists(COOKIES_FILE):
+        return ["--cookies", COOKIES_FILE]
+    return []
+
+
+def _setup_cookies():
+    if os.path.exists(COOKIES_FILE):
+        print(f"  [OK] cookies.txt encontrado")
+        return True
+
+    print("  YouTube bloquea descargas sin cookies en servidores.")
+    print()
+    print("  Para obtener cookies.txt:")
+    print("  1. En tu PC, instala la extension 'Get cookies.txt LOCALLY'")
+    print("     (Chrome/Firefox)")
+    print("  2. Ve a youtube.com y asegurate de estar logueado")
+    print("  3. Haz clic en la extension y exporta las cookies")
+    print("  4. Sube el archivo cookies.txt a:")
+    print(f"     {COOKIES_FILE}")
+    print()
+    input("  Presiona ENTER cuando hayas colocado cookies.txt...")
+
+    if os.path.exists(COOKIES_FILE):
+        print("  [OK] cookies.txt encontrado")
+        return True
+
+    print("  [!!] cookies.txt no encontrado.")
+    print("       Las descargas podrian fallar sin cookies.")
+    skip = input("  Intentar sin cookies? (s/n) [s]: ").strip().lower()
+    return skip != "n"
+
+
 def download_video(url: str, output_dir: str, max_height: int = 1080) -> str:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -40,8 +75,7 @@ def download_video(url: str, output_dir: str, max_height: int = 1080) -> str:
         "--no-playlist",
         "--no-overwrites",
         "-o", os.path.join(output_dir, "%(title).50s.%(ext)s"),
-        url,
-    ]
+    ] + _get_cookies_args() + [url]
 
     result = subprocess.run(
         cmd, capture_output=True, text=True,
@@ -49,7 +83,13 @@ def download_video(url: str, output_dir: str, max_height: int = 1080) -> str:
     )
 
     if result.returncode != 0:
-        err = result.stderr[-500:] if result.stderr else "(sin detalles)"
+        stderr = result.stderr or ""
+        if "Sign in to confirm" in stderr or "bot" in stderr.lower():
+            raise RuntimeError(
+                "YouTube bloqueo la descarga. Necesitas cookies.txt.\n"
+                "  Ejecuta: python cli.py --backgrounds"
+            )
+        err = stderr[-500:] if stderr else "(sin detalles)"
         raise RuntimeError(f"yt-dlp fallo: {err}")
 
     files = sorted(
@@ -70,7 +110,11 @@ def interactive_download():
     print("\nEstos videos se usan como fondo mientras se narra.")
     print("Pega enlaces de YouTube con gameplay, naturaleza, etc.\n")
 
-    n_largos = input("Cuantos videos LARGOS (horizontales 16:9)? [4]: ").strip()
+    if not _setup_cookies():
+        print("  Descarga cancelada.")
+        return 0, 0
+
+    n_largos = input("\nCuantos videos LARGOS (horizontales 16:9)? [4]: ").strip()
     n_largos = int(n_largos) if n_largos.isdigit() and int(n_largos) > 0 else 4
 
     n_shorts = input("Cuantos videos para SHORTS (se recortan automatico)? [4]: ").strip()
