@@ -1,0 +1,27 @@
+{
+  "provider": "openrouter",
+  "api_base_url": "https://openrouter.ai/api/v1/chat/completions",
+
+  "long_model": "mistralai/mistral-small-2603",
+  "short_model": "openrouter/auto",
+  "free_models": [
+    "openrouter/free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+  ],
+
+  "tts_voice": "es-MX-DaliaNeural",
+  "generate_short": true,
+  "upload_to_youtube": true,
+  "youtube_privacy": "public",
+  "music_query": "epic",
+
+  "videos_per_day": 20,
+  "whisper_model": "base",
+  "ffmpeg_preset": "fast",
+  "ffmpeg_crf": 26,
+  "cleanup_after_upload": true,
+  "min_disk_gb": 2
+}
