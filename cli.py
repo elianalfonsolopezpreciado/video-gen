@@ -588,10 +588,17 @@ def check_deps():
 
     print()
 
-    from modules.resource_manager import ResourceManager
+    from modules.resource_manager import ResourceManager, get_swap_info
     rm = ResourceManager()
     rm._update_status()
     print(f"  {rm.format_status()}")
+
+    swap = get_swap_info()
+    if not swap["has_swap"]:
+        checks.append(("Swap (memoria virtual)", False))
+        print("  [!!] Sin swap — usa: python cli.py --swap")
+    else:
+        checks.append(("Swap (memoria virtual)", True))
 
     from modules.config_manager import load_config
     cfg = load_config()
@@ -675,6 +682,10 @@ def main():
         help="Descargar mas videos de fondo",
     )
     parser.add_argument(
+        "--swap", action="store_true",
+        help="Crear/verificar swap (memoria virtual)",
+    )
+    parser.add_argument(
         "--batch", type=int, default=0,
         help="Generar N videos y parar (en vez de daemon)",
     )
@@ -715,6 +726,14 @@ def main():
     if args.backgrounds:
         from modules.bg_downloader import interactive_download
         interactive_download()
+        return
+
+    if args.swap:
+        from modules.resource_manager import setup_swap_interactive, get_swap_info
+        setup_swap_interactive()
+        swap = get_swap_info()
+        if swap["has_swap"]:
+            print(f"\n  Swap activo: {swap['total_mb']:.0f} MB")
         return
 
     # ── Primera ejecucion → wizard automatico ──
